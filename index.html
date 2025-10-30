@@ -965,14 +965,8 @@
                 margin-left: -5px;
             }
 
-            .map-sidebar {
-                width: 100%;
-            }
-
             .toggle-sidebar {
                 position: absolute;
-                left: 345px;
-                top: 5px;
                 background: var(--primary);
                 color: white;
                 border: none;
@@ -981,16 +975,22 @@
                 cursor: pointer;
                 z-index: 501;
                 transition: all 0.3s ease;
-                box-shadow: var(--shadow);
+                box-shadow: var(--shadow);                            
             }
-
             .toggle-sidebar:hover {
                 background: var(--secondary);
             }
-
-            .map-sidebar.collapsed ~ .toggle-sidebar {
-                left: 75px;
+            .map-sidebar {
+                width: 80%;
+                transform: translateX(0);
             }
+            .map-sidebar.collapsed {
+                transform: translateX(-100%) !important; 
+            }
+            .map-sidebar.collapsed ~ .toggle-sidebar {
+                left: 10px !important; 
+            }
+            
             #btn-txt {
                 display: none;
             }
@@ -1183,10 +1183,6 @@
         /* ═══════════════════════════════════════════════════════════════════
         MODAL BLOCO DE NOTAS | EDITOR RICO - FORMATAÇÃO DE TEXTO
         ═══════════════════════════════════════════════════════════════════ */
-        /* ═══════════════════════════════════════════════════════════════════
-        MODAL BLOCO DE NOTAS
-        ═══════════════════════════════════════════════════════════════════ */
-
         .modalx {
             position: fixed;
             top: 0;
@@ -2000,7 +1996,6 @@
         
         const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgHxbekUL2KcoP_HghbRsKETz_k7OjTIF0WmIc9Dj9KY5OuKDeD9DvndNLz4OlvDQ1sQ/exec';
         const BACKEND_URL = 'https://unredressed-billi-ropable.ngrok-free.dev';
-        // const BACKEND_URL = 'http://localhost:3000';
 
         // Estado Global
         let map;
@@ -2135,14 +2130,137 @@
         }
 
         // ═══════════════════════════════════════════════════════════════════════════════
-        // API - GOOGLE SHEETS
+        // API - GOOGLE SHEETS  +   REVERSE GEOCODING - ENRIQUECER DADOS DOS HOTÉIS
         // ═══════════════════════════════════════════════════════════════════════════════
-
+        
+        // Cache para evitar requisições duplicadas
+        const geocodeCache = {};
+        
+        // Mapeamento de países para continentes
+        const countryToContinente = {
+            'Brasil': 'América do Sul', 'Brazil': 'América do Sul',
+            'Argentina': 'América do Sul', 'Chile': 'América do Sul',
+            'Colômbia': 'América do Sul', 'Colombia': 'América do Sul',
+            'Peru': 'América do Sul', 'Uruguai': 'América do Sul',
+            'Venezuela': 'América do Sul', 'Equador': 'América do Sul',
+            
+            'Estados Unidos': 'América do Norte', 'United States': 'América do Norte',
+            'México': 'América do Norte', 'Mexico': 'América do Norte',
+            'Canadá': 'América do Norte', 'Canada': 'América do Norte',
+            
+            'Portugal': 'Europa', 'Espanha': 'Europa', 'Spain': 'Europa',
+            'França': 'Europa', 'France': 'Europa',
+            'Itália': 'Europa', 'Italy': 'Europa',
+            'Alemanha': 'Europa', 'Germany': 'Europa',
+            'Reino Unido': 'Europa', 'United Kingdom': 'Europa',
+            'Holanda': 'Europa', 'Netherlands': 'Europa',
+            'Bélgica': 'Europa', 'Belgium': 'Europa',
+            'Suíça': 'Europa', 'Switzerland': 'Europa',
+            'Áustria': 'Europa', 'Austria': 'Europa',
+            'Grécia': 'Europa', 'Greece': 'Europa',
+            
+            'Japão': 'Ásia', 'Japan': 'Ásia',
+            'China': 'Ásia', 'Índia': 'Ásia', 'India': 'Ásia',
+            'Tailândia': 'Ásia', 'Thailand': 'Ásia',
+            'Vietnã': 'Ásia', 'Vietnam': 'Ásia',
+            
+            'África do Sul': 'África', 'South Africa': 'África',
+            'Egito': 'África', 'Egypt': 'África',
+            'Marrocos': 'África', 'Morocco': 'África',
+            
+            'Austrália': 'Oceania', 'Australia': 'Oceania',
+            'Nova Zelândia': 'Oceania', 'New Zealand': 'Oceania'
+        };
+        
+        async function enrichHotelWithLocation(hotel) {
+            // Se já tem cache, usar
+            const cacheKey = `${hotel.latitude},${hotel.longitude}`;
+            if (geocodeCache[cacheKey]) {
+                return { ...hotel, ...geocodeCache[cacheKey] };
+            }
+            
+            try {
+                // Usar API gratuita do OpenStreetMap (Nominatim)
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/reverse?` +
+                    `format=json&lat=${hotel.latitude}&lon=${hotel.longitude}&` +
+                    `addressdetails=1&accept-language=pt-BR`,
+                    {
+                        headers: {
+                            'User-Agent': 'SellaStay/1.0' // Obrigatório para Nominatim
+                        }
+                    }
+                );
+                
+                if (!response.ok) throw new Error('Geocoding failed');
+                
+                const data = await response.json();
+                const address = data.address || {};
+                
+                // Extrair informações
+                const cidade = address.city || address.town || address.village || 
+                              address.municipality || address.county || '';
+                const estado = address.state || address.province || '';
+                const pais = address.country || '';
+                const continente = countryToContinente[pais] || 'Desconhecido';
+                
+                const enriched = {
+                    cidade,
+                    estado,
+                    pais,
+                    continente
+                };
+                
+                // Salvar no cache
+                geocodeCache[cacheKey] = enriched;
+                
+                return { ...hotel, ...enriched };
+                
+            } catch (error) {
+                console.warn('Erro no geocoding:', error);
+                
+                // Fallback: tentar extrair do endereço (só para Brasil)
+                const match = hotel.endereco?.match(/([A-Za-zÀ-ú\s]+)\s*-\s*([A-Z]{2})/);
+                return {
+                    ...hotel,
+                    cidade: match ? match[1].trim() : '',
+                    estado: match ? match[2].trim() : '',
+                    pais: 'Brasil',
+                    continente: 'América do Sul'
+                };
+            }
+        }
+        
+        async function enrichAllHotels(hotels) {
+            showToast('🌍 Carregando dados de localização...', 'success');
+            
+            // Processar em lotes de 10 para não sobrecarregar a API
+            const batchSize = 10;
+            const enriched = [];
+            
+            for (let i = 0; i < hotels.length; i += batchSize) {
+                const batch = hotels.slice(i, i + batchSize);
+                const promises = batch.map(hotel => enrichHotelWithLocation(hotel));
+                const results = await Promise.all(promises);
+                enriched.push(...results);
+                
+                // Aguardar 1 segundo entre lotes (respeitar rate limit)
+                if (i + batchSize < hotels.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+            
+            showToast('✅ Dados de localização.', 'success');
+            return enriched;
+        }
+        
         async function loadHotelsData() {
             try {
                 const response = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?action=hotels`);
                 const data = await response.json();
-                allHotels = data.hotels || [];
+                
+                allHotels = await enrichAllHotels(data.hotels || []);
+                
                 filteredHotels = [...allHotels];
                 populateMapFilters();
                 return data;
@@ -2451,13 +2569,16 @@
         }
 
         function populateMapFilters() {
-            const continents = [...new Set(allHotels.map(h => h.Continente).filter(Boolean))].sort();
+            const continents = [...new Set(allHotels.map(h => h.continente).filter(Boolean))].sort();
             populateSelect('filterContinent', continents);
-            const countries = [...new Set(allHotels.map(h => h.País).filter(Boolean))].sort();
+            
+            const countries = [...new Set(allHotels.map(h => h.pais).filter(Boolean))].sort();
             populateSelect('filterCountry', countries);
-            const states = [...new Set(allHotels.map(h => h.UF).filter(Boolean))].sort();
+            
+            const states = [...new Set(allHotels.map(h => h.estado).filter(Boolean))].sort();
             populateSelect('filterState', states);
-            const cities = [...new Set(allHotels.map(h => h.Cidade).filter(Boolean))].sort();
+            
+            const cities = [...new Set(allHotels.map(h => h.cidade).filter(Boolean))].sort();
             populateSelect('filterCity', cities);
         }
 
@@ -2481,20 +2602,20 @@
             const state = document.getElementById('filterState').value;
             const city = document.getElementById('filterCity').value;
             const category = document.getElementById('filterCategory').value;
-
+        
             filteredHotels = allHotels.filter(hotel => {
-                const matchSearch = !searchText || hotel['Nome do Hotel']?.toLowerCase().includes(searchText);
-                const matchContinent = !continent || hotel.Continente === continent;
-                const matchCountry = !country || hotel.País === country;
-                const matchState = !state || hotel.UF === state;
-                const matchCity = !city || hotel.Cidade === city;
-                const matchCategory = !category || hotel.Categoria === category;
+                const matchSearch = !searchText || hotel.nome?.toLowerCase().includes(searchText);
+                const matchContinent = !continent || hotel.continente === continent;
+                const matchCountry = !country || hotel.pais === country;
+                const matchState = !state || hotel.estado === state;
+                const matchCity = !city || hotel.cidade === city;
+                const matchCategory = !category || hotel.categoria === category;
                 return matchSearch && matchContinent && matchCountry && matchState && matchCity && matchCategory;
             });
-
+        
             addMarkers(filteredHotels);
-            if (filteredHotels.length > 0) {
-                const bounds = L.latLngBounds(filteredHotels.map(h => [h.Latitude, h.Longitude]));
+            if (filteredHotels.length > 0 && filteredHotels[0].latitude) {
+                const bounds = L.latLngBounds(filteredHotels.map(h => [h.latitude, h.longitude]));
                 map.fitBounds(bounds, { padding: [50, 50] });
             }
         }
