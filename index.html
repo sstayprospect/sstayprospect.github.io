@@ -2259,7 +2259,7 @@
                 const response = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?action=hotels`);
                 const data = await response.json();
                 
-                allHotels = await enrichAllHotels(data.hotels || []);
+                allHotels = enrichHotelsForFiltering(data.hotels || []);
                 
                 filteredHotels = [...allHotels];
                 populateMapFilters();
@@ -2566,6 +2566,69 @@
                 'Rede hoteleira': 'marker-rede'
             };
             return map[category] || '';
+        }
+
+        function guessCountry(endereco) {
+            if (!endereco) return '';
+            const countries = [
+                "Brasil", "Portugal", "Espanha", "Argentina", "Chile", "Estados Unidos",
+                "United States", "USA", "Spain", "France", "Germany", "Alemanha",
+                "Italy", "Itália", "Uruguai", "Mexico", "México", "Peru", "UK", "United Kingdom"
+                // ... adicione outros relevantes
+            ];
+            for (const c of countries) {
+                if (endereco.toLowerCase().includes(c.toLowerCase())) return c;
+            }
+            // Fallback: assume Brasil se não encontrar nada muito diferente
+            return "Brasil";
+        }
+        
+        function guessState(endereco) {
+            if (!endereco) return '';
+            // Procura padrão " - XX" ou "XX," ou "XX " no final
+            const regex = /[-,]\s*([A-Z]{2})(?!\w)/g;
+            let match, state = '';
+            while ((match = regex.exec(endereco)) !== null) state = match[1];
+            return state;
+        }
+        
+        function guessCity(endereco) {
+            // Pega cidade tentando localizar o trecho antes do UF ("Cidade - XX" ou "Cidade, XX")
+            if (!endereco) return '';
+            // Ex: "Rua Y, Bairro, Belo Horizonte - MG, 30440-090"
+            const parts = endereco.split('-');
+            if (parts.length > 1) {
+                const cityChunk = parts[0].split(',').pop().trim();
+                return cityChunk;
+            }
+            // Fallback: último chunk antes do último ", XX"
+            const match = endereco.match(/,\s?([^,-]+)\s*-\s*[A-Z]{2}/);
+            if (match) return match[1].trim();
+            return '';
+        }
+        
+        function guessContinent(pais) {
+            if (!pais) return '';
+            const map = {
+                "Brasil":"América do Sul","Argentina":"América do Sul","Chile":"América do Sul",
+                "Uruguai":"América do Sul","Peru":"América do Sul","Portugal":"Europa",
+                "Espanha":"Europa","Spain":"Europa","France":"Europa", "Alemanha":"Europa",
+                "Germany":"Europa","Italy":"Europa", "Itália":"Europa","USA":"América do Norte",
+                "Estados Unidos":"América do Norte","United States":"América do Norte","Mexico":"América do Norte",
+                "México":"América do Norte","United Kingdom":"Europa","UK":"Europa"
+                // ... adicione mais no seu uso real!
+            };
+            return map[pais] || '';
+        }
+
+        function enrichHotelsForFiltering(hotels) {
+            return hotels.map(hotel => {
+                const pais = guessCountry(hotel.endereco || '');
+                const estado = guessState(hotel.endereco || '');
+                const cidade = guessCity(hotel.endereco || '');
+                const continente = guessContinent(pais);
+                return { ...hotel, pais, estado, cidade, continente };
+            });
         }
 
         function populateMapFilters() {
