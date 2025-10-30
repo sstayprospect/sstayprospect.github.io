@@ -1,6 +1,6 @@
 {
-  "name": "SellaStay Survey",
-  "short_name": "Survey",
+  "name": "SellaStay Prospect",
+  "short_name": "Prospect",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#3e0163",
@@ -19,3 +19,4 @@
   ]
 
 }
+
