@@ -2174,58 +2174,6 @@
             'Austrália': 'Oceania', 'Australia': 'Oceania',
             'Nova Zelândia': 'Oceania', 'New Zealand': 'Oceania'
         };
-            
-            try {
-                // Usar API gratuita do OpenStreetMap (Nominatim)
-                const response = await fetch(
-                    `https://nominatim.openstreetmap.org/reverse?` +
-                    `format=json&lat=${hotel.latitude}&lon=${hotel.longitude}&` +
-                    `addressdetails=1&accept-language=pt-BR`,
-                    {
-                        headers: {
-                            'User-Agent': 'SellaStay/1.0' // Obrigatório para Nominatim
-                        }
-                    }
-                );
-                
-                if (!response.ok) throw new Error('Geocoding failed');
-                
-                const data = await response.json();
-                const address = data.address || {};
-                
-                // Extrair informações
-                const cidade = address.city || address.town || address.village || 
-                              address.municipality || address.county || '';
-                const estado = address.state || address.province || '';
-                const pais = address.country || '';
-                const continente = countryToContinente[pais] || 'Desconhecido';
-                
-                const enriched = {
-                    cidade,
-                    estado,
-                    pais,
-                    continente
-                };
-                
-                // Salvar no cache
-                geocodeCache[cacheKey] = enriched;
-                
-                return { ...hotel, ...enriched };
-                
-            } catch (error) {
-                console.warn('Erro no geocoding:', error);
-                
-                // Fallback: tentar extrair do endereço (só para Brasil)
-                const match = hotel.endereco?.match(/([A-Za-zÀ-ú\s]+)\s*-\s*([A-Z]{2})/);
-                return {
-                    ...hotel,
-                    cidade: match ? match[1].trim() : '',
-                    estado: match ? match[2].trim() : '',
-                    pais: 'Brasil',
-                    continente: 'América do Sul'
-                };
-            }
-        }
 
         async function loadHotelsData() {
             try {
