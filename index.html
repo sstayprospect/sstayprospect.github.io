@@ -141,6 +141,12 @@
             text-align: center;
         }
 
+        .stat-number {
+            font-size: 24px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
         #totalHotels {
             margin-left: 20px;
         }
@@ -152,12 +158,6 @@
         }
         #statlabels {
             margin-left: 10px;
-        }
-
-        .stat-number {
-            font-size: 24px;
-            font-weight: 700;
-            line-height: 1;
         }
 
         .stat-label {
@@ -1541,11 +1541,11 @@
                 <div class="header-stats">
                     <div class="stat-box">
                         <div class="stat-number" id="totalHotels">0</div>
-                        <div class="stat-label">Hotéis</div>
+                        <div class="stat-label" id="statlabelh">Hotéis</div>
                     </div>
                     <div class="stat-box">
                         <div class="stat-number" id="totalSurveys">0</div>
-                        <div class="stat-label">Respostas</div>
+                        <div class="stat-label" id="statlabels">Respostas</div>
                     </div>
                 </div>
             </div>
@@ -1855,7 +1855,7 @@
                 </div>
             </div>
 
-            <div style="gap:5px; margin-bottom:25px;">
+            <div style="gap:5px; margin-bottom:25px;"> 
                 <div class="chart-card">
                     <h3 class="chart-title">Número de Quartos</h3>
                     <div class="chart-container">
