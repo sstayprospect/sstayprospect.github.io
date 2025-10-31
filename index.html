@@ -1988,9 +1988,6 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-    <!-- Ilib Address JS -->
-    <script src="https://unpkg.com/ilib@14.21.1/dist/ilib-14.21.1.js"></script>
-
     <!-- Global Settings -->
     <script>
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -2180,7 +2177,7 @@
                 const response = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?action=hotels`);
                 const data = await response.json();
                 
-                allHotels = enrichHotelsForFiltering(data.hotels || []);
+                allHotels = await enrichHotelsForFiltering(data.hotels || []);
                 
                 filteredHotels = [...allHotels];
                 populateMapFilters();
@@ -2542,23 +2539,33 @@
             return map[pais] || '';
         }
 
-        function parseAnyAddress(endereco) {
-            var address = new ilib.Address(endereco); // Agora 'ilib' está sempre disponível!
-            return {
-                pais: address.country || '',
-                estado: address.region || '',
-                cidade: address.locality || '',
-                cep: address.postalCode || '',
-                street: address.streetAddress || ''
-            };
+        // Exemplo de parser internacional - Geoapify
+        async function parseAnyAddress(endereco) {
+            const resp = await fetch(
+                `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(endereco)}&language=pt&apiKey=a0cc4716d16a4b1ba63603b3ab96748b`
+            );
+            const data = await resp.json();
+            if (data.features && data.features[0]) {
+                const props = data.features[0].properties;
+                return {
+                    pais: props.country,
+                    estado: props.state || props.region || '',
+                    cidade: props.city || props.county || '',
+                    cep: props.postcode || '',
+                    street: props.street || props.address_line1 || ''
+                };
+            }
+            return {};
         }
 
-        function enrichHotelsForFiltering(hotels) {
-            return hotels.map(hotel => {
-                const enriched = parseAnyAddress(hotel.endereco || '');
+        async function enrichHotelsForFiltering(hotels) {
+            const enrichedHotels = [];
+            for (const hotel of hotels) {
+                const enriched = await parseAnyAddress(hotel.endereco || '');
                 const continente = countryToContinente[enriched.pais] || '';
-                return { ...hotel, ...enriched, continente };
-            });
+                enrichedHotels.push({ ...hotel, ...enriched, continente });
+            }
+            return enrichedHotels;
         }
         
         // Heurística flexível: do mais específico para o mais amplo
