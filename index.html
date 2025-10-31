@@ -2539,33 +2539,84 @@
             return map[pais] || '';
         }
 
-        // Exemplo de parser internacional - Geoapify
-        async function parseAnyAddress(endereco) {
-            const resp = await fetch(
-                `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(endereco)}&language=pt&apiKey=a0cc4716d16a4b1ba63603b3ab96748b`
-            );
-            const data = await resp.json();
-            if (data.features && data.features[0]) {
-                const props = data.features[0].properties;
-                return {
-                    pais: props.country,
-                    estado: props.state || props.region || '',
-                    cidade: props.city || props.county || '',
-                    cep: props.postcode || '',
-                    street: props.street || props.address_line1 || ''
-                };
+        function parseAnyAddress(enderecoRaw) {
+            let pais = "", estado = "", cidade = "", bairro = "", cep = "", street = "";
+            let endereco = (enderecoRaw || "").trim();
+        
+            // Quebra por vírgula e reverte para analisar da direita p/ esquerda
+            const parts = endereco.split(",").map(s => s.trim()).reverse();
+        
+            // Patterns país
+            const paises = [
+                "Brasil", "Espanha", "Estados Unidos", "México",
+                "Argentina", "Chile", "Portugal"
+                // Adicione outros aqui
+            ];
+        
+            // Patterns estados brasileiros
+            const estadosBR = [
+                "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT",
+                "MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO",
+                "RR","SC","SP","SE","TO"
+            ];
+        
+            let foundPais = false, foundEstado = false, foundCEP = false;
+            let uf = "";
+            // Analisa da direita para esquerda
+            for (let idx=0; idx<parts.length; idx++) {
+                let part = parts[idx];
+        
+                // País
+                if (paises.some(p=>part.toLowerCase().includes(p.toLowerCase())) && !foundPais) {
+                    pais = paises.find(p => part.toLowerCase().includes(p.toLowerCase()));
+                    foundPais = true;
+                    continue;
+                }
+                // Estado BR - geralmente tipo "- MG" ou "MG"
+                let ufMatch = part.match(/([A-Z]{2})/);
+                if (ufMatch && estadosBR.includes(ufMatch[1]) && !foundEstado) {
+                    estado = ufMatch[1];
+                    foundEstado = true;
+                    continue;
+                }
+                // CEP Brasil/Argentina/Mexico/Portugal/espanha (formatos comuns)
+                let cepMatch = part.match(/\d{5}-?\d{3,4}/) || part.match(/[A-Z]\d{4}[A-Z]{2}/) || part.match(/\d{5}/);
+                if (cepMatch && !foundCEP) {
+                    cep = cepMatch[0];
+                    foundCEP = true;
+                    continue;
+                }
+                // Cidade: Se part anterior ao estado
+                if (foundEstado && !cidade) {
+                    cidade = part;
+                    continue;
+                }
+                // Cidade para países estrangeiros: geralmente antepenúltimo
+                if (foundPais && !cidade && idx < parts.length-1)
+                    cidade = part;
+                // Bairro Brasil (costuma ser logo antes da cidade/estado)
+                if (!bairro && !foundEstado && !foundPais && idx < parts.length-2)
+                    bairro = part;
             }
-            return {};
+        
+            // Rua: tudo a esquerda do primeiro bloco de vírgula antes dos outros campos
+            let baseLen = endereco.length;
+            let baseIdx = endereco.indexOf(parts.slice().reverse().join(","));
+            if (baseIdx === 0 || baseIdx === -1) street = parts[parts.length-1];
+            else street = endereco.slice(0, baseLen - parts.slice(0,-1).join(",").length).trim();
+        
+            // Fallback cidade para países que vêm antes do estado
+            if (!cidade && foundEstado && parts.length > 2) cidade = parts[1];
+        
+            return { pais, estado, cidade, bairro, cep, street };
         }
 
-        async function enrichHotelsForFiltering(hotels) {
-            const enrichedHotels = [];
-            for (const hotel of hotels) {
-                const enriched = await parseAnyAddress(hotel.endereco || '');
+        function enrichHotelsForFiltering(hotels) {
+            return hotels.map(hotel => {
+                const enriched = parseAnyAddress(hotel.endereco || '');
                 const continente = countryToContinente[enriched.pais] || '';
-                enrichedHotels.push({ ...hotel, ...enriched, continente });
-            }
-            return enrichedHotels;
+                return { ...hotel, ...enriched, continente };
+            });
         }
         
         // Heurística flexível: do mais específico para o mais amplo
