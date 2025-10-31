@@ -2174,13 +2174,6 @@
             'Austrália': 'Oceania', 'Australia': 'Oceania',
             'Nova Zelândia': 'Oceania', 'New Zealand': 'Oceania'
         };
-        
-        async function enrichHotelWithLocation(hotel) {
-            // Se já tem cache, usar
-            const cacheKey = `${hotel.latitude},${hotel.longitude}`;
-            if (geocodeCache[cacheKey]) {
-                return { ...hotel, ...geocodeCache[cacheKey] };
-            }
             
             try {
                 // Usar API gratuita do OpenStreetMap (Nominatim)
@@ -2233,30 +2226,7 @@
                 };
             }
         }
-        
-        async function enrichAllHotels(hotels) {
-            showToast('🌍 Carregando dados de localização...', 'success');
-            
-            // Processar em lotes de 10 para não sobrecarregar a API
-            const batchSize = 10;
-            const enriched = [];
-            
-            for (let i = 0; i < hotels.length; i += batchSize) {
-                const batch = hotels.slice(i, i + batchSize);
-                const promises = batch.map(hotel => enrichHotelWithLocation(hotel));
-                const results = await Promise.all(promises);
-                enriched.push(...results);
-                
-                // Aguardar 1 segundo entre lotes (respeitar rate limit)
-                if (i + batchSize < hotels.length) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                }
-            }
-            
-            showToast('✅ Dados de localização.', 'success');
-            return enriched;
-        }
-        
+
         async function loadHotelsData() {
             try {
                 const response = await fetch(`${GOOGLE_APPS_SCRIPT_URL}?action=hotels`);
@@ -2624,11 +2594,22 @@
             return map[pais] || '';
         }
 
+        function parseAnyAddress(end) {
+            var address = new ilib.Address(end);
+            return {
+                pais: address.country || '',
+                estado: address.region || '',
+                cidade: address.locality || '',
+                cep: address.postalCode || '',
+                street: address.streetAddress || ''
+            };
+        }
+
         function enrichHotelsForFiltering(hotels) {
             return hotels.map(hotel => {
-                const extra = parseAnyAddress(hotel.endereco || '');
-                // Para continental mapping, pode manter o pequeno dicionário do continente do passo anterior.
-                return { ...hotel, ...extra, continente: guessContinent(extra.pais) };
+                const enriched = parseAnyAddress(hotel.endereco || '');
+                const continente = countryToContinente[enriched.pais] || '';
+                return { ...hotel, ...enriched, continente };
             });
         }
         
