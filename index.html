@@ -1989,7 +1989,7 @@
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
     <!-- Ilib Address JS -->
-    <script src="https://cdn.jsdelivr.net/npm/ilib-address/dist/ilib-address.min.js"></script>
+    <script src="https://unpkg.com/ilib@14.21.1/dist/ilib-14.21.1.js"></script>
 
     <!-- Global Settings -->
     <script>
@@ -2542,8 +2542,8 @@
             return map[pais] || '';
         }
 
-        function parseAnyAddress(end) {
-            var address = new ilib.Address(end);
+        function parseAnyAddress(endereco) {
+            var address = new ilib.Address(endereco); // Agora 'ilib' está sempre disponível!
             return {
                 pais: address.country || '',
                 estado: address.region || '',
