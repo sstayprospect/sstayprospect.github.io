@@ -1988,6 +1988,9 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
+    <!-- Ilib Address JS -->
+    <script src="https://cdn.jsdelivr.net/npm/ilib-address/dist/ilib-address.min.js"></script>
+
     <!-- Global Settings -->
     <script>
         // ═══════════════════════════════════════════════════════════════════════════════
@@ -2623,8 +2626,9 @@
 
         function enrichHotelsForFiltering(hotels) {
             return hotels.map(hotel => {
-                const { cidade, estado, pais, continente } = parseAddressFlexible(hotel.endereco || '');
-                return { ...hotel, cidade, estado, pais, continente };
+                const extra = parseAnyAddress(hotel.endereco || '');
+                // Para continental mapping, pode manter o pequeno dicionário do continente do passo anterior.
+                return { ...hotel, ...extra, continente: guessContinent(extra.pais) };
             });
         }
         
