@@ -2623,14 +2623,75 @@
 
         function enrichHotelsForFiltering(hotels) {
             return hotels.map(hotel => {
-                const pais = guessCountry(hotel.endereco || '');
-                const estado = guessState(hotel.endereco || '');
-                const cidade = guessCity(hotel.endereco || '');
-                const continente = guessContinent(pais);
-                return { ...hotel, pais, estado, cidade, continente };
+                const { cidade, estado, pais, continente } = parseAddressFlexible(hotel.endereco || '');
+                return { ...hotel, cidade, estado, pais, continente };
             });
         }
+        
+        // Heurística flexível: do mais específico para o mais amplo
+        function parseAddressFlexible(endereco) {
+            let cidade = '', estado = '', pais = '', continente = '';
+        
+            // País manual comum (expanda conforme necessidade)
+            const countries = [
+                { name: "Brasil", aliases: ["Brasil", "Brazil"] },
+                { name: "Portugal", aliases: ["Portugal"] },
+                { name: "Espanha", aliases: ["Espanha", "Spain"] },
+                { name: "Argentina", aliases: ["Argentina"] },
+                { name: "Estados Unidos", aliases: ["Estados Unidos", "USA", "United States"] },
+                { name: "França", aliases: ["França", "France"] },
+                { name: "Alemanha", aliases: ["Alemanha", "Germany"] }
+                // Adicione outros países aqui
+            ];
+            for (const c of countries) {
+                if (c.aliases.some(alias => endereco.toLowerCase().includes(alias.toLowerCase()))) {
+                    pais = c.name;
+                    break;
+                }
+            }
+            // Default fallback se nada encontrado
+            if (!pais) pais = 'Brasil';
+        
+            // CONTINENTE (por país)
+            const continentMap = {
+                "Brasil": "América do Sul", "Portugal": "Europa", "Espanha": "Europa",
+                "Argentina": "América do Sul", "Estados Unidos": "América do Norte",
+                "França": "Europa", "Alemanha": "Europa"
+            };
+            continente = continentMap[pais] || '';
+        
+            // UF (Estado BR): tenta pelo final
+            let ufMatch = endereco.match(/[\s,-]([A-Z]{2})[\s,-]/);
+            if (!ufMatch) ufMatch = endereco.match(/- ([A-Z]{2}),?/);
+            estado = ufMatch ? ufMatch[1].trim() : '';
+        
+            // Cidade (tenta antes do - UF, ou antes do último vírgula, se tiver)
+            let cityMatch = endereco.match(/,\s*([^,]+)\s*-\s*[A-Z]{2}/);
+            if (cityMatch) {
+                cidade = cityMatch[1].trim();
+            } else {
+                // Jeito alternativo: tenta o penúltimo bloco separado por vírgula
+                let parts = endereco.split(',');
+                if (parts.length >= 3) cidade = parts[parts.length - 3].trim();
+                else if (parts.length >= 2) cidade = parts[parts.length - 2].trim();
+                // Se não achou, tenta um pedaço do início
+            }
+        
+            // Limpeza de números e sufixos errados
+            if (cidade && cidade.match(/^\d+$/)) cidade = '';
+            if (cidade && cidade.length <= 2) cidade = '';
+            if (!cidade && estado && endereco) {
+                // Se cidade não encontrada mas tem - UF, tenta pegar o bloco antes do - UF
+                let reg = new RegExp(`([\\w\\s]+)\\s*-\\s*${estado}`, 'i');
+                let m = endereco.match(reg);
+                if (m) cidade = m[1].trim();
+            }
+        
+            return { cidade, estado, pais, continente };
+        }
 
+        // ---last update
+        
         function populateMapFilters() {
             const continents = [...new Set(allHotels.map(h => h.continente).filter(Boolean))].sort();
             populateSelect('filterContinent', continents);
