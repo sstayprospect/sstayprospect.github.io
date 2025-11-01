@@ -1687,17 +1687,12 @@
                             <option value="">Todas</option>
                         </select>
                     </div>
-                     <div class="filter-group"> <!-- style="display: none;" -->
+                     <div class="filter-group">
                         <label class="filter-label">
-                            <i class="fas fa-star"></i> Categoria
+                            <i class="fas fa-star"></i> Bairro
                         </label>
-                        <select class="filter-select" id="filterCategory">
+                        <select id="filterBairro">
                             <option value="">Todas</option>
-                            <option value="Econômico">Econômico</option>
-                            <option value="Midscale">Midscale</option>
-                            <option value="Luxo">Luxo</option>
-                            <option value="Resort">Resort</option>
-                            <option value="Rede hoteleira">Rede hoteleira</option>
                         </select>
                     </div>
                     <div class="filter-buttons">
@@ -2550,70 +2545,56 @@
             let pais = "", estado = "", cidade = "", bairro = "", cep = "", street = "";
             let endereco = (enderecoRaw || "").trim();
         
-            // Quebra por vírgula e reverte para analisar da direita p/ esquerda
-            const parts = endereco.split(",").map(s => s.trim()).reverse();
-        
             // Patterns país
             const paises = [
-                "Brasil", "Espanha", "Estados Unidos", "México",
-                "Argentina", "Chile", "Portugal"
-                // Adicione outros aqui
+                "Brasil", "Portugal", "Espanha", "Estados Unidos", "México",
+                "Argentina", "Chile", "Uruguai", "Peru", "United States", "USA", "Spain", "France", "Germany", "Alemanha", "Italy", "Itália", "United Kingdom", "UK"
             ];
-        
-            // Patterns estados brasileiros
             const estadosBR = [
                 "AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT",
                 "MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO",
                 "RR","SC","SP","SE","TO"
             ];
+
+            const bairros = [...new Set(allHotels.map(h => h.bairro).filter(Boolean))].sort();
+                populateSelect('filterBairro', bairros);
+
+            // Split por ","
+            const parts = endereco.split(",").map(s => s.trim());
         
-            let foundPais = false, foundEstado = false, foundCEP = false;
-            let uf = "";
-            // Analisa da direita para esquerda
-            for (let idx=0; idx<parts.length; idx++) {
-                let part = parts[idx];
+            // Últimos campos (direita pra esquerda)
+            const last = parts.length - 1;
+            pais = paises.find(p => parts[last].toLowerCase().includes(p.toLowerCase())) || "";
+            if (!pais) pais = paises.find(p => endereco.toLowerCase().includes(p.toLowerCase())) || "Brasil";
         
-                // País
-                if (paises.some(p=>part.toLowerCase().includes(p.toLowerCase())) && !foundPais) {
-                    pais = paises.find(p => part.toLowerCase().includes(p.toLowerCase()));
-                    foundPais = true;
-                    continue;
-                }
-                // Estado BR - geralmente tipo "- MG" ou "MG"
-                let ufMatch = part.match(/([A-Z]{2})/);
-                if (ufMatch && estadosBR.includes(ufMatch[1]) && !foundEstado) {
-                    estado = ufMatch[1];
-                    foundEstado = true;
-                    continue;
-                }
-                // CEP Brasil/Argentina/Mexico/Portugal/espanha (formatos comuns)
-                let cepMatch = part.match(/\d{5}-?\d{3,4}/) || part.match(/[A-Z]\d{4}[A-Z]{2}/) || part.match(/\d{5}/);
-                if (cepMatch && !foundCEP) {
-                    cep = cepMatch[0];
-                    foundCEP = true;
-                    continue;
-                }
-                // Cidade: Se part anterior ao estado
-                if (foundEstado && !cidade) {
-                    cidade = part;
-                    continue;
-                }
-                // Cidade para países estrangeiros: geralmente antepenúltimo
-                if (foundPais && !cidade && idx < parts.length-1)
-                    cidade = part;
-                // Bairro Brasil (costuma ser logo antes da cidade/estado)
-                if (!bairro && !foundEstado && !foundPais && idx < parts.length-2)
-                    bairro = part;
+            // CEP sempre é o último bloco numérico
+            cep = (endereco.match(/\d{5}-?\d{3}/) || [])[0] || "";
+        
+            // Estado/Uf sempre é no final, antes do CEP
+            let ufMatch = endereco.match(/- ([A-Z]{2})[\s,]/);
+            estado = (ufMatch && estadosBR.includes(ufMatch[1])) ? ufMatch[1] : "";
+        
+            // Cidade: pega o bloco imediatamente antes da UF
+            // Ex: 'Praça da Padroeira, 100 - Centro, Bom Sucesso - MG, 37220-000'
+            // parts: [Praça da Padroeira, 100 - Centro, Bom Sucesso - MG, 37220-000]
+            if (estado) {
+                let cidadeMatch = endereco.match(/([A-Za-zÀ-ÖØ-öø-ÿ\s]+)\s*-\s*([A-Z]{2})[\s,]/);
+                cidade = (cidadeMatch ? cidadeMatch[1].trim() : "");
+            } else {
+                // Para estrangeiro, cidade geralmente antepenúltimo bloco
+                if (pais && parts.length > 2) cidade = parts[parts.length - 2];
             }
         
-            // Rua: tudo a esquerda do primeiro bloco de vírgula antes dos outros campos
-            let baseLen = endereco.length;
-            let baseIdx = endereco.indexOf(parts.slice().reverse().join(","));
-            if (baseIdx === 0 || baseIdx === -1) street = parts[parts.length-1];
-            else street = endereco.slice(0, baseLen - parts.slice(0,-1).join(",").length).trim();
-        
-            // Fallback cidade para países que vêm antes do estado
-            if (!cidade && foundEstado && parts.length > 2) cidade = parts[1];
+            // Bairro: pega o bloco imediatamente antes da cidade (Brasil)
+            if (estado && cidade) {
+                // Procura padrão 'rua, numero - Bairro, Cidade - UF, CEP'
+                let bairroMatch = endereco.match(/- ([\wÀ-ÖØ-öø-ÿ\s]+),\s*([A-Za-zÀ-ÖØ-öø-ÿ\s]+)\s*-\s*[A-Z]{2}/);
+                bairro = (bairroMatch ? bairroMatch[1].trim() : "");
+            } else if (!bairro && parts.length > 3 && pais && parts[parts.length - 3] !== cidade) {
+                bairro = parts[parts.length - 3];
+            }
+            // Street (nome da rua): sempre o primeiro bloco antes de vírgula
+            street = parts[0];
         
             return { pais, estado, cidade, bairro, cep, street };
         }
@@ -2687,21 +2668,22 @@
         
             return { cidade, estado, pais, continente };
         }
-
-        // ---last update
         
         function populateMapFilters() {
             const continents = [...new Set(allHotels.map(h => h.continente).filter(Boolean))].sort();
             populateSelect('filterContinent', continents);
-            
+        
             const countries = [...new Set(allHotels.map(h => h.pais).filter(Boolean))].sort();
             populateSelect('filterCountry', countries);
-            
+        
             const states = [...new Set(allHotels.map(h => h.estado).filter(Boolean))].sort();
             populateSelect('filterState', states);
-            
+        
             const cities = [...new Set(allHotels.map(h => h.cidade).filter(Boolean))].sort();
             populateSelect('filterCity', cities);
+        
+            const bairros = [...new Set(allHotels.map(h => h.bairro).filter(Boolean))].sort();
+            populateSelect('filterBairro', bairros);
         }
 
         function populateSelect(selectId, options) {
@@ -2723,7 +2705,8 @@
             const country = document.getElementById('filterCountry').value;
             const state = document.getElementById('filterState').value;
             const city = document.getElementById('filterCity').value;
-            const category = document.getElementById('filterCategory').value;
+            const bairro = document.getElementById('filterBairro').value;
+            // Remova category/categoria
         
             filteredHotels = allHotels.filter(hotel => {
                 const matchSearch = !searchText || hotel.nome?.toLowerCase().includes(searchText);
@@ -2731,10 +2714,9 @@
                 const matchCountry = !country || hotel.pais === country;
                 const matchState = !state || hotel.estado === state;
                 const matchCity = !city || hotel.cidade === city;
-                const matchCategory = !category || hotel.categoria === category;
-                return matchSearch && matchContinent && matchCountry && matchState && matchCity && matchCategory;
+                const matchBairro = !bairro || hotel.bairro === bairro;
+                return matchSearch && matchContinent && matchCountry && matchState && matchCity && matchBairro;
             });
-        
             addMarkers(filteredHotels);
             if (filteredHotels.length > 0 && filteredHotels[0].latitude) {
                 const bounds = L.latLngBounds(filteredHotels.map(h => [h.latitude, h.longitude]));
@@ -2748,7 +2730,7 @@
             document.getElementById('filterCountry').value = '';
             document.getElementById('filterState').value = '';
             document.getElementById('filterCity').value = '';
-            document.getElementById('filterCategory').value = '';
+            document.getElementById('filterBairro').value = '';
             applyMapFilters();
         }
 
