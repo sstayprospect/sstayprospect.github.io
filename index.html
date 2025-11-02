@@ -2544,23 +2544,23 @@
         function parseAnyAddress(enderecoRaw) {
             let pais = "", estado = "", cidade = "", bairro = "", cep = "", street = "";
             let endereco = (enderecoRaw || "").trim();
-        
-            // Países, Estados
+
+            // Patterns
             const paises = ["Brasil", "Portugal", "Espanha", "Estados Unidos", "México", "Argentina", "Chile", "Uruguai", "Peru"];
             const estadosBR = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
-        
-            // Split por vírgula
+
+            // Separação por vírgula
             const parts = endereco.split(",").map(s => s.trim());
             pais = paises.find(p => endereco.toLowerCase().includes(p.toLowerCase())) || "Brasil";
             cep = (endereco.match(/\d{5}-?\d{3}/) || [])[0] || "";
             let ufMatch = endereco.match(/- ([A-Z]{2})[\s,]/);
             estado = (ufMatch && estadosBR.includes(ufMatch[1])) ? ufMatch[1] : "";
-        
-            // Cidade: bloco antes do - UF e ignorar se for estado, número, CEP ou bairros
+
+            // Cidade: busca bloco antes do - UF, ignora números, CEP e estados
             let cidadeMatch = endereco.match(/([A-Za-zÀ-ÖØ-öø-ÿ\s]+)\s*-\s*([A-Z]{2})[\s,]/);
             cidade = cidadeMatch ? cidadeMatch[1].trim() : "";
             if (!cidade || cidade.match(/^\d+$/) || estadosBR.includes(cidade) || cidade === cep) {
-                // Busca penúltimo bloco que seja válido
+                // Alternativa: penúltimo bloco válido
                 for (let i = parts.length - 2; i >= 0; i--) {
                     let item = parts[i];
                     if (item && !item.match(/^\d+$/) && !estadosBR.includes(item) && item !== cep && item.length > 2) {
@@ -2569,41 +2569,37 @@
                     }
                 }
             }
-        
-            // Bairro: pega bloco antes da cidade, ignora número/rua/uf
+
+            // Bairro: bloco antes da cidade, ignorando números/estado/cep
             bairro = "";
             if (cidade) {
                 let idx = parts.findIndex(v => v.includes(cidade));
                 if (idx > 0) {
                     let busca = parts[idx-1];
-                    if (busca && !busca.match(/^\d+$/) && !estadosBR.includes(busca) && !busca.match(/^\d{5}-?\d{3}/) && busca.length <= 30) {
-                        // Tira número se vier tipo "1761 - Foz do Iguaçu"
+                    if (busca && !busca.match(/^\d+$/) && !estadosBR.includes(busca) && !busca.match(/\d{5}-?\d{3}/) && busca.length <= 30 && busca !== cidade) {
                         let binParts = busca.split('-').map(v => v.trim());
                         bairro = binParts.length > 1 && binParts[0].match(/^\d+$/) ? binParts[1] : binParts[0];
-                        // Não pegar cidade
-                        if (bairro === cidade) bairro = "";
-                        // Não pegar número
-                        if (bairro && bairro.match(/^\d+$/)) bairro = "";
+                        if (bairro.match(/^\d+$/)) bairro = "";
                     }
                 }
             }
-            // Se bairro não encontrado, busca bloco anterior válido
-            if (!bairro) {
-                for (let i = parts.length - 3; i >= 0; i--) {
-                    let busca = parts[i];
-                    if (busca && !busca.match(/^\d+$/) && busca.length <= 30 && !estadosBR.includes(busca) && busca !== cidade) {
-                        let binParts = busca.split('-').map(v => v.trim());
-                        bairro = binParts.length > 1 && binParts[0].match(/^\d+$/) ? binParts[1] : binParts[0];
-                        if (bairro === cidade || bairro.match(/^\d+$/)) bairro = "";
-                        else break;
-                    }
-                }
-            }
-        
+
             street = parts[0];
-        
             return { pais, estado, cidade, bairro, cep, street };
         }
+        function populateBairroByCidade(cidadeSelecionada) {
+            const bairros = [...new Set(allHotels
+                .filter(h => h.cidade === cidadeSelecionada)
+                .map(h => h.bairro)
+                .filter(Boolean)
+                .filter(b => b.length > 2 && !b.match(/^\d+$/) && !estadosBR.includes(b))
+            )].sort();
+            populateSelect('filterBairro', bairros);
+        }
+
+        document.getElementById('filterCity').addEventListener('change', function() {
+            populateBairroByCidade(this.value);
+        });
 
         function enrichHotelsForFiltering(hotels) {
             return hotels.map(hotel => {
