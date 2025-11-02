@@ -2692,18 +2692,20 @@
             populateSelect('filterBairro', bairros);
         }
 
-        function populateSelect(selectId, options) {
-            const select = document.getElementById(selectId);
-            const firstOption = select.options[0];
-            select.innerHTML = '';
-            select.appendChild(firstOption);
-            options.forEach(opt => {
-                const option = document.createElement('option');
-                option.value = opt;
-                option.textContent = opt;
-                select.appendChild(option);
-            });
+        function populateBairroByCidade(cidadeSelecionada) {
+            const bairros = [...new Set(allHotels
+                .filter(h => h.cidade === cidadeSelecionada)
+                .map(h => h.bairro)
+                .filter(Boolean)
+                .filter(b => b.length > 2 && !b.match(/^\d+$/) && !estadosBR.includes(b))
+            )].sort();
+            populateSelect('filterBairro', bairros);
         }
+        
+        // No evento do dropdown cidade:
+        document.getElementById('filterCity').addEventListener('change', function() {
+            populateBairroByCidade(this.value);
+        });
 
         function applyMapFilters() {
             const searchText = document.getElementById('filterSearch').value.toLowerCase();
