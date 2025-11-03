@@ -2598,7 +2598,14 @@
         }
 
         document.getElementById('filterCity').addEventListener('change', function() {
-            populateBairroByCidade(this.value);
+            const cidade = this.value;
+            const bairrosDaCidade = [...new Set(
+                allHotels
+                .filter(h => h.cidade === cidade)
+                .map(h => h.bairro)
+                .filter(b => b && b.length > 2 && !b.match(/^\d+$/) && !["apto 2", "s/n"].includes(b.toLowerCase()))
+            )].sort();
+            populateSelect('filterBairro', bairrosDaCidade);
         });
 
         function enrichHotelsForFiltering(hotels) {
@@ -2708,17 +2715,17 @@
             const state = document.getElementById('filterState').value;
             const city = document.getElementById('filterCity').value;
             const bairro = document.getElementById('filterBairro').value;
-            // Remova category/categoria
-        
+
             filteredHotels = allHotels.filter(hotel => {
                 const matchSearch = !searchText || hotel.nome?.toLowerCase().includes(searchText);
                 const matchContinent = !continent || hotel.continente === continent;
                 const matchCountry = !country || hotel.pais === country;
                 const matchState = !state || hotel.estado === state;
                 const matchCity = !city || hotel.cidade === city;
-                const matchBairro = !bairro || hotel.bairro === bairro;
+                const matchBairro = !bairro || (!city ? hotel.bairro === bairro : (hotel.cidade === city && hotel.bairro === bairro));
                 return matchSearch && matchContinent && matchCountry && matchState && matchCity && matchBairro;
             });
+
             addMarkers(filteredHotels);
             if (filteredHotels.length > 0 && filteredHotels[0].latitude) {
                 const bounds = L.latLngBounds(filteredHotels.map(h => [h.latitude, h.longitude]));
