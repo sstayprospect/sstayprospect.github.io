@@ -3003,7 +3003,7 @@
             selectedHotels.clear();
 
             try {
-                const response = await fetch(BACKENDURL + '/api/scrape-hotels', {
+                const response = await fetch(BACKEND_URL + '/api/scrape-hotels', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -3021,7 +3021,7 @@
                 }
             } catch (error) {
                 console.error('Erro na busca:', error);
-                showStatus('Erro ao conectar com o servidor. Certifique-se de que o backend está rodando em BACKENDURL.', 'error');
+                showStatus('Erro ao conectar com o servidor. Certifique-se de que o backend está rodando em BACKEND_URL.', 'error');
             } finally {
                 scrapingEmAndamento = false; // libera lock
                 searchBtn.disabled = false;
