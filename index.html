@@ -2984,50 +2984,42 @@
         async function iniciarScraping() {
             const searchInput = document.getElementById('gmapsSearchInput');
             const searchQuery = searchInput.value.trim();
-            
             if (!searchQuery) {
-                showStatus('Por favor, digite uma pesquisa', 'error');
+                showToast('Digite uma pesquisa');
                 return;
             }
-            
-            const resultsDiv = document.getElementById('gmapsResultsContainer');
             const searchBtn = document.getElementById('btnGmapsSearch');
-            
-            // Limpar seleções anteriores
-            selectedHotels.clear();
-            
-            // Mostrar loading
-            showStatus('⏳ Buscando hotéis no Google Maps... Isso pode levar alguns minutos.', 'info');
-            resultsDiv.style.display = 'none';
             searchBtn.disabled = true;
             searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
-            
+            showStatus('Buscando hotéis no Google Maps...', 'info');
+            // Limpa resultados anteriores
+            resultsDiv.style.display = 'none';
+            selectedHotels.clear();
+        
             try {
-                const response = await fetch(`${BACKEND_URL}/api/scrape-hotels`, {
+                const response = await fetch(BACKENDURL + '/api/scrape-hotels', {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR_463Y318dEmJxKen9QFrZe' // ← NGROK TOKEN
+                        'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR463Y318dEmJxKen9QFrZe'
                     },
                     body: JSON.stringify({ searchQuery })
                 });
-                
                 const data = await response.json();
                 
                 if (data.success) {
                     scrapedHotels = data.hotels;
                     exibirResultadosGmaps(data.hotels);
-                    showStatus(`✅ ${data.total} hotéis encontrados com sucesso!`, 'success');
+                    showStatus(`${data.total} hotéis encontrados com sucesso!`, 'success');
                 } else {
-                    showStatus('❌ Erro ao buscar hotéis: ' + data.error, 'error');
+                    showStatus(`Erro ao buscar hotéis: ${data.error}`, 'error');
                 }
-                
             } catch (error) {
-                console.error('Erro:', error);
-                showStatus('❌ Erro ao conectar com o servidor. Certifique-se de que o backend está rodando em ' + BACKEND_URL, 'error');
+                console.error('Erro na busca:', error);
+                showStatus('Erro ao conectar com o servidor. Certifique-se de que o backend está rodando em BACKENDURL.', 'error');
             } finally {
                 searchBtn.disabled = false;
-                searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar no Google Maps';
+                searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
             }
         }
 
