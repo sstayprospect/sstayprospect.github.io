@@ -1586,8 +1586,7 @@
                 class="search-input" 
                 id="gmapsSearchInput" 
                 placeholder="Ex: Hotel em Copacabana, Rio de Janeiro"
-                onkeypress="if(event.key==='Enter') iniciarScraping()"
-            >
+                onkeypress="if(event.key==='Enter') iniciarScraping()">
             <button class="btn-search" id="btnGmapsSearch" onclick="iniciarScraping()">
                 <i class="fas fa-search"></i> <span id="btn-txt">Buscar</span>
             </button>
@@ -2980,22 +2979,29 @@
         // Armazenar hotéis extraídos globalmente
         let scrapedHotels = [];
         let selectedHotels = new Set();
+        let scrapingEmAndamento = false;
 
         async function iniciarScraping() {
+            if (scrapingEmAndamento) return; // IMPEDIR DUPLA BUSCA
+            scrapingEmAndamento = true;
+
             const searchInput = document.getElementById('gmapsSearchInput');
             const searchQuery = searchInput.value.trim();
+
             if (!searchQuery) {
                 showToast('Digite uma pesquisa');
+                scrapingEmAndamento = false; // libera lock
                 return;
             }
+
             const searchBtn = document.getElementById('btnGmapsSearch');
             searchBtn.disabled = true;
             searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
-            showStatus('Buscando hotéis no Google Maps...', 'info');
+            showStatus('Buscando hotéis no Google Maps... Isso pode levar alguns minutos.', 'info');
             // Limpa resultados anteriores
             resultsDiv.style.display = 'none';
             selectedHotels.clear();
-        
+
             try {
                 const response = await fetch(BACKENDURL + '/api/scrape-hotels', {
                     method: 'POST',
@@ -3006,7 +3012,6 @@
                     body: JSON.stringify({ searchQuery })
                 });
                 const data = await response.json();
-                
                 if (data.success) {
                     scrapedHotels = data.hotels;
                     exibirResultadosGmaps(data.hotels);
@@ -3018,6 +3023,7 @@
                 console.error('Erro na busca:', error);
                 showStatus('Erro ao conectar com o servidor. Certifique-se de que o backend está rodando em BACKENDURL.', 'error');
             } finally {
+                scrapingEmAndamento = false; // libera lock
                 searchBtn.disabled = false;
                 searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
             }
