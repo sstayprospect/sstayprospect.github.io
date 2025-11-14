@@ -1563,6 +1563,12 @@
                 <i class="fas fa-poll"></i> <span id="btn-txt">Respostas Survey</span>
             </button>
             <button class="nav-tab" onclick="switchView('dashboard')" data-view="dashboard">
+                <i class="fas fa-solid fa-user-tie"></i> <span id="btn-txt">DMs</span>
+            </button>
+            <!-- <button class="nav-tab" onclick="switchView('dashboard')" data-view="dashboard">
+                <i class="fas fa-chart-line"></i> <span id="btn-txt">Dashboard</span>
+            </button> -->
+            <button class="nav-tab" onclick="switchView('dashboard')" data-view="dashboard">
                 <i class="fas fa-chart-line"></i> <span id="btn-txt">Dashboard</span>
             </button>
         </div>
@@ -1586,8 +1592,8 @@
                 class="search-input" 
                 id="gmapsSearchInput" 
                 placeholder="Ex: Hotel em Copacabana, Rio de Janeiro"
-                onkeypress="if(event.key==='Enter') iniciarScraping()">
-            <button class="btn-search" id="btnGmapsSearch" onclick="iniciarScraping()">
+                >
+            <button class="btn-search" id="btnGmapsSearch" >
                 <i class="fas fa-search"></i> <span id="btn-txt">Buscar</span>
             </button>
         </div>
@@ -2984,48 +2990,99 @@
         let scrapingEmAndamento = false;
 
         async function iniciarScraping() {
-            if (scrapingEmAndamento) return; // IMPEDIR DUPLA BUSCA
-            scrapingEmAndamento = true;
-
             const searchInput = document.getElementById('gmapsSearchInput');
             const searchQuery = searchInput.value.trim();
 
             if (!searchQuery) {
-                showToast('Digite uma pesquisa');
-                scrapingEmAndamento = false; // libera lock
+                showToast('Digite uma pesquisa!', 'error');
                 return;
             }
 
             const searchBtn = document.getElementById('btnGmapsSearch');
             searchBtn.disabled = true;
-            searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
-            showStatus('Buscando hotéis no Google Maps... Isso pode levar alguns minutos.', 'info');
-            // Limpa resultados anteriores
-            resultsDiv.style.display = 'none';
-            selectedHotels.clear();
+            searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
 
             try {
-                const response = await fetch(BACKEND_URL + '/api/scrape-hotels', {
+                // Iniciar scraping assíncrono
+                showStatus('Iniciando busca...', 'info');
+
+                const startResponse = await fetch(BACKEND_URL + '/api/scrape-async', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR463Y318dEmJxKen9QFrZe'
+                        'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR_463Y318dEmJxKen9QFrZe'
                     },
                     body: JSON.stringify({ searchQuery })
                 });
-                const data = await response.json();
-                if (data.success) {
-                    scrapedHotels = data.hotels;
-                    exibirResultadosGmaps(data.hotels);
-                    showStatus(`${data.total} hotéis encontrados com sucesso!`, 'success');
-                } else {
-                    showStatus(`Erro ao buscar hotéis: ${data.error}`, 'error');
+
+                const startData = await startResponse.json();
+
+                if (!startData.success) {
+                    throw new Error(startData.error || 'Erro ao iniciar busca');
                 }
+
+                const jobId = startData.jobId;
+                console.log('[JOB] Iniciado:', jobId);
+                showStatus(`Job ${jobId} criado. Processando...`, 'info');
+
+                // Função para verificar status
+                let checkCount = 0;
+                const checkStatus = async () => {
+                    try {
+                        checkCount++;
+                        console.log(`[JOB] Verificando status (tentativa ${checkCount})...`);
+
+                        const statusResponse = await fetch(BACKEND_URL + '/api/job-status/' + jobId, {
+                            headers: {
+                                'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR_463Y318dEmJxKen9QFrZe'
+                            }
+                        });
+
+                        const statusData = await statusResponse.json();
+
+                        if (!statusData.success) {
+                            throw new Error(statusData.error || 'Job não encontrado');
+                        }
+
+                        const job = statusData.job;
+                        console.log('[JOB] Status:', job.status, '| Progress:', job.total);
+
+                        if (job.status === 'completed') {
+                            // SUCESSO!
+                            console.log('[JOB] Completado!', job.total, 'hotéis');
+                            scrapedHotels = job.hotels;
+                            exibirResultadosGmaps(job.hotels);
+                            showStatus(`${job.total} hotéis encontrados!`, 'success');
+                            searchBtn.disabled = false;
+                            searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
+
+                        } else if (job.status === 'error') {
+                            // ERRO
+                            throw new Error(job.error || 'Erro no processamento');
+
+                        } else if (job.status === 'processing') {
+                            // AINDA PROCESSANDO
+                            const msg = job.total > 0 ? `Processando... ${job.total} hotéis coletados` : 'Processando...';
+                            showStatus(msg, 'info');
+
+                            // Verificar novamente em 10 segundos
+                            setTimeout(checkStatus, 10000);
+                        }
+
+                    } catch (error) {
+                        console.error('[JOB] Erro ao verificar status:', error);
+                        showStatus('Erro: ' + error.message, 'error');
+                        searchBtn.disabled = false;
+                        searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
+                    }
+                };
+
+                // Iniciar verificação após 5 segundos
+                setTimeout(checkStatus, 5000);
+
             } catch (error) {
-                console.error('Erro na busca:', error);
-                showStatus('Erro ao conectar com o servidor. Certifique-se de que o backend está rodando em BACKEND_URL.', 'error');
-            } finally {
-                scrapingEmAndamento = false; // libera lock
+                console.error('[ERROR]', error);
+                showStatus('Erro ao iniciar busca: ' + error.message, 'error');
                 searchBtn.disabled = false;
                 searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
             }
@@ -3247,42 +3304,7 @@
             panel.classList.toggle('expanded');
         }
 
-        async function iniciarScraping() {
-            const searchInput = document.getElementById('gmapsSearchInput');
-            const searchQuery = searchInput.value.trim();
-            
-            if (!searchQuery) {
-                showToast('Digite uma pesquisa');
-                return;
-            }
-            
-            const searchBtn = document.getElementById('btnGmapsSearch');
-            searchBtn.disabled = true;
-            searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando...';
-            
-            try {
-                const response = await fetch(`${BACKEND_URL}/api/scrape-hotels`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR_463Y318dEmJxKen9QFrZe' // ← ADICIONE ESTA LINHA
-                    },
-                    body: JSON.stringify({ searchQuery })
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    scrapedHotels = data.hotels;
-                    exibirResultadosGmaps(data.hotels);
-                }
-            } catch (error) {
-                showToast('Erro: ' + error.message);
-            } finally {
-                searchBtn.disabled = false;
-                searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
-            }
-        }
+        
 
         function exibirResultadosGmaps(hotels) {
             const resultsBody = document.getElementById('gmapsResults');
@@ -3539,6 +3561,32 @@
                 document.getElementById('lastSaved').textContent = `Salvo ${timeAgo}`;
             }
         }
-    </script>
+    
+        // Event Listeners configurados após carregamento
+        document.addEventListener('DOMContentLoaded', function() {
+            const btn = document.getElementById('btnGmapsSearch');
+            const input = document.getElementById('gmapsSearchInput');
+
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    if (typeof iniciarScraping === 'function') {
+                        iniciarScraping();
+                    }
+                });
+            }
+
+            if (input) {
+                input.addEventListener('keypress', function(event) {
+                    if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (typeof iniciarScraping === 'function') {
+                            iniciarScraping();
+                        }
+                    }
+                });
+            }
+        });
+        
+</script>
 </body>
 </html>
