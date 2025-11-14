@@ -356,16 +356,16 @@
         }
 
         .search-status.error {
-            background: #f8d7da;
+            background: transparent;
             color: #721c24;
-            border: 1px solid #f5c6cb;
+            border: none;
             display: block;
         }
 
         .search-status.info {
-            background: #d1ecf1;
+            background: transparent;
             color: #0c5460;
-            border: 1px solid #bee5eb;
+            border: none;
             display: block;
         }
 
@@ -2258,6 +2258,7 @@
                 const response = await fetch(`${BACKEND_URL}/api/scrape`, {
                   method: 'POST',
                         headers: { 
+                            'ngrok-skip-browser-warning': 'true',
                             'Content-Type': 'application/json',
                             'x-auth-token': AUTHTOKEN
                         },
@@ -2988,6 +2989,7 @@
         let scrapedHotels = [];
         let selectedHotels = new Set();
         let scrapingEmAndamento = false;
+        let jobStatusTimeout = null;
 
         async function iniciarScraping() {
             const searchInput = document.getElementById('gmapsSearchInput');
@@ -2997,10 +2999,19 @@
                 showToast('Digite uma pesquisa!', 'error');
                 return;
             }
+            if (scrapingEmAndamento) {
+                showStatus('Já existe uma busca em andamento. Aguarde o processamento atual finalizar.', 'warning');
+                return;
+            }
 
             const searchBtn = document.getElementById('btnGmapsSearch');
             searchBtn.disabled = true;
             searchBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+            scrapingEmAndamento = true;
+            if (jobStatusTimeout) {
+                clearTimeout(jobStatusTimeout);
+                jobStatusTimeout = null;
+            }
 
             try {
                 // Iniciar scraping assíncrono
@@ -3009,6 +3020,7 @@
                 const startResponse = await fetch(BACKEND_URL + '/api/scrape-async', {
                     method: 'POST',
                     headers: {
+                        'ngrok-skip-browser-warning': 'true',
                         'Content-Type': 'application/json',
                         'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR_463Y318dEmJxKen9QFrZe'
                     },
@@ -3034,6 +3046,7 @@
 
                         const statusResponse = await fetch(BACKEND_URL + '/api/job-status/' + jobId, {
                             headers: {
+                                'ngrok-skip-browser-warning': 'true',
                                 'x-auth-token': '34khQkEe50jqqYpfrp1QsUPCiMR_463Y318dEmJxKen9QFrZe'
                             }
                         });
@@ -3055,9 +3068,19 @@
                             showStatus(`${job.total} hotéis encontrados!`, 'success');
                             searchBtn.disabled = false;
                             searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
+                            scrapingEmAndamento = false;
+                            if (jobStatusTimeout) {
+                                clearTimeout(jobStatusTimeout);
+                                jobStatusTimeout = null;
+                            }
 
                         } else if (job.status === 'error') {
                             // ERRO
+                            scrapingEmAndamento = false;
+                            if (jobStatusTimeout) {
+                                clearTimeout(jobStatusTimeout);
+                                jobStatusTimeout = null;
+                            }
                             throw new Error(job.error || 'Erro no processamento');
 
                         } else if (job.status === 'processing') {
@@ -3065,8 +3088,12 @@
                             const msg = job.total > 0 ? `Processando... ${job.total} hotéis coletados` : 'Processando...';
                             showStatus(msg, 'info');
 
-                            // Verificar novamente em 10 segundos
-                            setTimeout(checkStatus, 10000);
+                            // Reagendar verificação com base no progresso
+                            if (jobStatusTimeout) {
+                                clearTimeout(jobStatusTimeout);
+                            }
+                            const delay = job.total > 0 ? 6000 : 8000;
+                            jobStatusTimeout = setTimeout(checkStatus, delay);
                         }
 
                     } catch (error) {
@@ -3074,17 +3101,27 @@
                         showStatus('Erro: ' + error.message, 'error');
                         searchBtn.disabled = false;
                         searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
+                        scrapingEmAndamento = false;
+                        if (jobStatusTimeout) {
+                            clearTimeout(jobStatusTimeout);
+                            jobStatusTimeout = null;
+                        }
                     }
                 };
 
-                // Iniciar verificação após 5 segundos
-                setTimeout(checkStatus, 5000);
+                // Inicia a verificação imediatamente
+                checkStatus();
 
             } catch (error) {
                 console.error('[ERROR]', error);
                 showStatus('Erro ao iniciar busca: ' + error.message, 'error');
                 searchBtn.disabled = false;
                 searchBtn.innerHTML = '<i class="fas fa-search"></i> Buscar';
+                scrapingEmAndamento = false;
+                if (jobStatusTimeout) {
+                    clearTimeout(jobStatusTimeout);
+                    jobStatusTimeout = null;
+                }
             }
         }
 
